@@ -24,15 +24,16 @@ Put a commit id there to pin a version. Its tests run first; a failing test stop
 ## One-time setup
 
 **Android signing key** (without it each build is signed with a throwaway key: it installs, but the next build will
-not install over it). Make a key once, keep the file and password somewhere safe (lose it and updates stop working),
-and never commit it:
+not install over it). Make a key once with the script (needs `openssl` and a signed-in `gh`); it asks for a password,
+writes `~/interstitial-diary-keys/interstitial.p12` and sets the three repository secrets:
 
 ```bash
-keytool -genkeypair -v -keystore interstitial.jks -alias interstitial -keyalg RSA -keysize 2048 -validity 10000
+bash scripts/make-android-key.sh
 ```
 
-Then add three repository secrets (Settings > Secrets and variables > Actions): `ANDROID_KEYSTORE_BASE64` (the output
-of `base64 -w0 interstitial.jks`), `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS` (`interstitial`).
+Keep that file and the password somewhere safe (lose either and updates stop working), and never commit it. By hand
+instead: Settings > Secrets and variables > Actions, add `ANDROID_KEYSTORE_BASE64` (the output of `base64 -w0` on a
+PKCS12 or JKS keystore), `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`.
 
 **Dropbox sign-in.** Inside the apps the web app's address is `https://tauri.localhost/`, so that address has to be
 added to the Dropbox app's redirect URIs (Dropbox App Console > the app > OAuth 2 > Redirect URIs).
