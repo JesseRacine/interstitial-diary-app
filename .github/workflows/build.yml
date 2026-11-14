@@ -152,11 +152,18 @@ jobs:
           test -d "$ndk" || { echo "::error::No Android NDK found on the runner"; exit 1; }
           echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
 
-      # The Android project is generated fresh each time (src-tauri/gen is not committed), then given our icons.
+      # The Android project is generated fresh each time (src-tauri/gen is not committed), then given our icons and
+      # our MainActivity (src-tauri/android/MainActivity.kt: keeps the app clear of the status bar and camera cutout).
       - name: Generate the Android project
         run: |
+          set -euo pipefail
           npx tauri android init --ci --skip-targets-install
           cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
+          generated="$(find src-tauri/gen/android/app/src/main -name MainActivity.kt)"
+          test "$(echo "$generated" | grep -c .)" = 1 || { echo "::error::Expected one generated MainActivity.kt, found: $generated"; exit 1; }
+          grep -q "^package $(head -1 src-tauri/android/MainActivity.kt | cut -d' ' -f2)\$" "$generated" \
+            || { echo "::error::The package in src-tauri/android/MainActivity.kt does not match the app id"; exit 1; }
+          cp src-tauri/android/MainActivity.kt "$generated"
 
       # Phones only: 64-bit and 32-bit ARM in one "universal" APK (no emulator/x86 builds).
       - name: Build the APK

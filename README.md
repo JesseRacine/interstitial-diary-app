@@ -55,4 +55,5 @@ added to the Dropbox app's redirect URIs (Dropbox App Console > the app > OAuth 
 | `web.ref` | Which version of the web app to build |
 | `src-tauri/tauri.conf.json` | App name, id, version, window |
 | `src-tauri/src/` | The native side (just opens the window for now) |
+| `src-tauri/android/MainActivity.kt` | Android: keeps the app clear of the status bar, camera cutout and keyboard |
 | `src-tauri/icons/` | Icons, made with `npx tauri icon src-tauri/app-icon.svg` |
