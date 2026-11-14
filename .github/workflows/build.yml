@@ -1,0 +1,222 @@
+# Builds the Windows installer (.exe) and the Android app (.apk) of Interstitial Diary.
+#
+# Runs on every push to main, by hand from the Actions tab, and for version tags (v0.1.0): a tag also makes a
+# GitHub Release with both files attached. The finished files of any run are under "Artifacts" on the run's page.
+#
+# The journal itself is the web app from another repo (WEB_REPO below). Job 1 checks it out at the ref named in the
+# file `web.ref`, runs its tests and builds it once; the Windows and Android jobs wrap that same build.
+name: Build apps
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      web_ref:
+        description: Branch, tag or commit of the web app to build (empty = what the file web.ref says)
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WEB_REPO: JesseRacine/interstitial-diary
+  NODE_VERSION: 26
+
+jobs:
+  web:
+    name: Web app (tests + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Which version of the web app
+        id: ref
+        env:
+          INPUT_REF: ${{ inputs.web_ref }}
+        run: |
+          ref="${INPUT_REF:-$(tr -d '[:space:]' < web.ref)}"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "Web app ref: $ref" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v7
+        with:
+          repository: ${{ env.WEB_REPO }}
+          ref: ${{ steps.ref.outputs.ref }}
+          path: web
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+        working-directory: web
+
+      - name: Tests
+        run: npm test
+        working-directory: web
+
+      # No BASE_PATH: inside the app the web app is served from the root ("/").
+      - name: Build
+        run: npm run build
+        working-directory: web
+
+      - name: Record the web app commit
+        run: echo "Web app commit $(git -C web rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: web/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    name: Windows installer
+    needs: web
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Build the installer
+        run: npx tauri build --ci
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+  android:
+    name: Android APK
+    needs: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # The runner image already has the Android SDK (ANDROID_HOME) and NDK; Tauri looks for the NDK in NDK_HOME.
+      - name: Point Tauri at the Android NDK
+        run: |
+          ndk="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          test -d "$ndk" || { echo "::error::No Android NDK found on the runner"; exit 1; }
+          echo "NDK_HOME=$ndk" >> "$GITHUB_ENV"
+
+      # The Android project is generated fresh each time (src-tauri/gen is not committed), then given our icons.
+      - name: Generate the Android project
+        run: |
+          npx tauri android init --ci --skip-targets-install
+          cp -r src-tauri/icons/android/. src-tauri/gen/android/app/src/main/res/
+
+      # Phones only: 64-bit and 32-bit ARM in one "universal" APK (no emulator/x86 builds).
+      - name: Build the APK
+        run: npx tauri android build --apk --target aarch64 armv7 --ci
+
+      # With the ANDROID_KEYSTORE_* secrets set, the APK is signed with your own key, so each new version installs
+      # over the last one. Without them it is signed with a throwaway key made for this run: it installs, but a later
+      # build will not install over it (Android refuses a different signature; you would have to uninstall first).
+      - name: Sign the APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)"
+          unsigned="$(find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' | head -1)"
+          test -n "$unsigned" || { echo "::error::The build made no APK"; exit 1; }
+          version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          keystore="$RUNNER_TEMP/signing.jks"
+          suffix=""
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$keystore"
+          else
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: signed with a throwaway test key (see README.md)."
+            export KEYSTORE_PASSWORD=throwaway KEY_ALIAS=test
+            suffix="-testkey"
+            keytool -genkeypair -keystore "$keystore" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Interstitial Diary test build"
+          fi
+          mkdir -p out
+          signed="out/Interstitial-Diary-$version$suffix.apk"
+          "$tools/zipalign" -f -p 4 "$unsigned" "$RUNNER_TEMP/aligned.apk"
+          "$tools/apksigner" sign --ks "$keystore" --ks-key-alias "$KEY_ALIAS" --ks-pass env:KEYSTORE_PASSWORD \
+            --out "$signed" "$RUNNER_TEMP/aligned.apk"
+          "$tools/apksigner" verify "$signed"
+          rm -f "$keystore"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android-apk
+          path: out/*.apk
+          if-no-files-found: error
+
+  release:
+    name: GitHub Release (version tags only)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: files
+          pattern: '{windows-installer,android-apk}'
+          merge-multiple: true
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" files/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes

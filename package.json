@@ -1,0 +1,12 @@
+{
+  "name": "interstitial-diary-app",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Windows and Android apps for Interstitial Diary (a Tauri shell around the web app).",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4"
+  }
+}

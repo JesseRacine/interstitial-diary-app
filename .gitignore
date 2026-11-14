@@ -1,0 +1,10 @@
+node_modules/
+# The web app is checked out and built here by the workflow (see README.md); it is never committed.
+web/
+# Rust build output and the generated Android project (made fresh by `tauri android init` in each build).
+src-tauri/target/
+src-tauri/gen/
+# Signing keys never belong in the repo.
+*.jks
+*.keystore
+.env*

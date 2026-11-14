@@ -1,0 +1,22 @@
+[package]
+name = "interstitial-diary-app"
+version = "0.1.0"
+description = "Windows and Android apps for Interstitial Diary"
+edition = "2021"
+
+[lib]
+# Android loads the app as a library; Windows uses src/main.rs, which calls into the same library.
+name = "interstitial_diary_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+
+[profile.release]
+strip = true
+opt-level = "s"
+lto = true
+codegen-units = 1
