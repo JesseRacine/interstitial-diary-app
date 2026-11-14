@@ -1,0 +1,20 @@
+Interstitial Diary, portable Windows version
+=============================================
+
+No installation: keep this folder anywhere you can write to (Documents, a USB stick; not Program Files) and start
+"Interstitial Diary.exe".
+
+Your journal on this PC is kept in the "journal-data" folder that appears beside the program the first time it runs.
+Nothing is stored in your Windows user profile (AppData). To move the app to another PC, close it and copy the whole
+folder.
+
+- journal-data holds your entries, photos, settings and the Dropbox sign-in, in a database that only the app reads.
+  Treat it like the journal itself: whoever copies it can read your journal.
+- For readable Markdown files use Settings > Export in the app, or connect Dropbox.
+- To start empty on this PC, close the app and delete journal-data. Entries that were not yet saved to Dropbox are
+  lost when you do.
+- If the folder is somewhere Windows does not let the app write, the data goes to
+  AppData\Local\io.github.jesseracine.interstitialdiary instead.
+
+The program is not code-signed, so Windows SmartScreen may warn the first time: "More info" > "Run anyway".
+It needs Microsoft's WebView2, which is part of Windows 11 and of up-to-date Windows 10.

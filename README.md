@@ -1,6 +1,6 @@
 # Interstitial Diary: Windows and Android apps
 
-The Windows installer and the Android APK of [Interstitial Diary](https://github.com/JesseRacine/interstitial-diary).
+The portable Windows program and the Android APK of [Interstitial Diary](https://github.com/JesseRacine/interstitial-diary).
 This repo holds only a thin [Tauri](https://tauri.app) shell and the build; the journal itself is the web app in the
 other repo, built unchanged and shown in a native window. Storage is the web app's own (Dropbox for syncing).
 
@@ -9,7 +9,7 @@ Nothing is built on your own computer: GitHub Actions does it all.
 ## Getting a build
 
 - **Every push to `main`** (or Actions > Build apps > Run workflow) builds both apps. Open the run and download
-  `windows-installer` and `android-apk` under **Artifacts**.
+  `windows-portable` and `android-apk` under **Artifacts**.
 - **A version tag** (`v0.1.0`) also creates a GitHub Release with both files attached.
 
 Which version of the web app goes in: the branch, tag or commit named in [`web.ref`](web.ref) (`main` = the newest).
@@ -38,7 +38,10 @@ PKCS12 or JKS keystore), `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_ALIAS`.
 **Dropbox sign-in.** Inside the apps the web app's address is `https://tauri.localhost/`, so that address has to be
 added to the Dropbox app's redirect URIs (Dropbox App Console > the app > OAuth 2 > Redirect URIs).
 
-**Windows.** The installer is not code-signed, so Windows SmartScreen warns the first time ("More info" > "Run anyway").
+**Windows.** There is no installer: unzip `windows-portable` anywhere you can write to and run
+`Interstitial Diary.exe`. Its data goes in a `journal-data` folder beside the program, nothing in AppData
+(`src-tauri/src/lib.rs`; details for the person using it in `src-tauri/windows/Read me.txt`, which ships in the
+folder). The program is not code-signed, so Windows SmartScreen warns the first time ("More info" > "Run anyway").
 
 ## Good to know
 
@@ -54,6 +57,8 @@ added to the Dropbox app's redirect URIs (Dropbox App Console > the app > OAuth 
 | `.github/workflows/build.yml` | The build: web app, then Windows and Android, then a Release for tags |
 | `web.ref` | Which version of the web app to build |
 | `src-tauri/tauri.conf.json` | App name, id, version, window |
-| `src-tauri/src/` | The native side (just opens the window for now) |
+| `src-tauri/src/` | The native side: on Windows it opens the window with its data folder beside the program |
+| `src-tauri/tauri.windows.conf.json` | Windows only: the same window, but opened by `lib.rs` instead of by Tauri |
+| `src-tauri/windows/Read me.txt` | The note that ships in the Windows folder |
 | `src-tauri/android/MainActivity.kt` | Android: keeps the app clear of the status bar, camera cutout and keyboard |
 | `src-tauri/icons/` | Icons, made with `npx tauri icon src-tauri/app-icon.svg` |

@@ -1,4 +1,5 @@
-# Builds the Windows installer (.exe) and the Android app (.apk) of Interstitial Diary.
+# Builds the portable Windows program (a folder with the .exe, no installer) and the Android app (.apk) of
+# Interstitial Diary.
 #
 # Runs on every push to main, by hand from the Actions tab, and for version tags (v0.1.0): a tag also makes a
 # GitHub Release with both files attached. The finished files of any run are under "Artifacts" on the run's page.
@@ -80,7 +81,7 @@ jobs:
           retention-days: 7
 
   windows:
-    name: Windows installer
+    name: Windows portable folder
     needs: web
     runs-on: windows-latest
     steps:
@@ -104,13 +105,25 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Build the installer
-        run: npx tauri build --ci
+      # No installer: just the program (src-tauri/src/lib.rs keeps its data in a folder beside it).
+      - name: Build the program
+        run: npx tauri build --ci --no-bundle
+
+      # The artifact is the folder people unzip and run: the program and a short read-me.
+      - name: Put the portable folder together
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe="$(find src-tauri/target/release -maxdepth 1 -name '*.exe')"
+          test "$(echo "$exe" | grep -c .)" = 1 || { echo "::error::Expected one program in target/release, found: $exe"; exit 1; }
+          mkdir -p "portable/Interstitial Diary"
+          cp "$exe" "portable/Interstitial Diary/Interstitial Diary.exe"
+          cp "src-tauri/windows/Read me.txt" "portable/Interstitial Diary/"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: windows-installer
-          path: src-tauri/target/release/bundle/nsis/*.exe
+          name: windows-portable
+          path: portable
           if-no-files-found: error
 
   android:
@@ -219,8 +232,16 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: files
-          pattern: '{windows-installer,android-apk}'
+          pattern: '{windows-portable,android-apk}'
           merge-multiple: true
+
+      # A release needs one file for Windows: zip the portable folder.
+      - name: Zip the Windows folder
+        working-directory: files
+        run: |
+          set -euo pipefail
+          zip -r "Interstitial-Diary-windows-portable-${GITHUB_REF_NAME#v}.zip" "Interstitial Diary"
+          rm -r "Interstitial Diary"
 
       - name: Create the release
         env:
