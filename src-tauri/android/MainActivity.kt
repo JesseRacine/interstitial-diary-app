@@ -17,6 +17,7 @@ import androidx.core.view.WindowInsetsCompat
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
+    removeSavedSite() // before the web view exists
     super.onCreate(savedInstanceState)
 
     val content = findViewById<View>(android.R.id.content)
@@ -30,6 +31,27 @@ class MainActivity : TauriActivity() {
       WindowInsetsCompat.CONSUMED
     }
     paintBackground()
+  }
+
+  // Earlier builds of the web app saved a copy of the site in the web view (a "service worker" and its cache) so that it
+  // could work offline. Here the whole site is already inside the app, so that copy only hides new versions: the old one
+  // is served first, and it can never be replaced, because the web view's update check for it goes to the real network
+  // instead of through the app. The web app no longer creates one (src/lib/nativeApp.ts); this deletes any left behind
+  // by an older build. Only that folder: the journal's own database and everything else stay. It runs once per process,
+  // before the first web view (a later activity restart in the same process would find the folder in use). Errors are
+  // ignored: a copy that cannot be removed is no worse than before, and a missing folder is the normal case.
+  private fun removeSavedSite() {
+    if (savedSiteChecked) return
+    savedSiteChecked = true
+    try {
+      java.io.File(applicationInfo.dataDir, "app_webview/Default/Service Worker").deleteRecursively()
+    } catch (ignored: Exception) {
+      // see above: nothing to do
+    }
+  }
+
+  companion object {
+    private var savedSiteChecked = false
   }
 
   // The manifest keeps the activity alive when the phone switches between light and dark, so repaint here.

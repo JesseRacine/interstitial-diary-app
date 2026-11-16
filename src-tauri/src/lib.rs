@@ -28,10 +28,23 @@ fn open_portable_window(app: &tauri::AppHandle) -> tauri::Result<()> {
         .clone();
     let mut window = tauri::WebviewWindowBuilder::from_config(app, &config)?;
     if let Some(dir) = portable_data_dir() {
+        remove_saved_site(&dir);
         window = window.data_directory(dir);
     }
     window.build()?;
     Ok(())
+}
+
+// Earlier builds of the web app saved a copy of the site in the web view (a "service worker" and its cache) so that it
+// could work offline. Here the whole site is already inside the program, so that copy only hides new versions: the old
+// one is served first, and it can never be replaced, because the web view's update check for it goes to the real
+// network instead of through this program. The web app no longer creates one (src/lib/nativeApp.ts); this deletes any
+// left behind by an older build, before the window exists (so nothing has it open). It is only the saved copy: the
+// journal's own database (IndexedDB) and everything else in `journal-data` stay as they are. Errors are ignored: a copy
+// that cannot be removed is no worse than before, and a missing folder is the normal case.
+#[cfg(windows)]
+fn remove_saved_site(data_dir: &std::path::Path) {
+    let _ = std::fs::remove_dir_all(data_dir.join("EBWebView").join("Default").join("Service Worker"));
 }
 
 // `journal-data` beside the program. None when it cannot be created (a read-only place such as Program Files): the
