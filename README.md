@@ -57,8 +57,15 @@ folder). The program is not code-signed, so Windows SmartScreen warns the first 
 | `.github/workflows/build.yml` | The build: web app, then Windows and Android, then a Release for tags |
 | `web.ref` | Which version of the web app to build |
 | `src-tauri/tauri.conf.json` | App name, id, version, window |
-| `src-tauri/src/` | The native side: on Windows it opens the window with its data folder beside the program |
+| `src-tauri/src/` | The native side: on Windows it opens the window with its data folder beside the program, and first deletes any old saved copy of the site (`journal-data\EBWebView\Default\Service Worker`) |
 | `src-tauri/tauri.windows.conf.json` | Windows only: the same window, but opened by `lib.rs` instead of by Tauri |
 | `src-tauri/windows/Read me.txt` | The note that ships in the Windows folder |
-| `src-tauri/android/MainActivity.kt` | Android: keeps the app clear of the status bar, camera cutout and keyboard |
+| `src-tauri/android/MainActivity.kt` | Android: keeps the app clear of the status bar, camera cutout and keyboard; deletes any old saved copy of the site at startup |
 | `src-tauri/icons/` | Icons, made with `npx tauri icon src-tauri/app-icon.svg` |
+
+**Why the old saved copy is deleted by the app.** The web app is also a PWA, and a browser saves a copy of a PWA (a
+"service worker" and its cache) to work offline. Inside these apps that only hides new versions: the old copy is served
+first, and it can never be replaced, because the web view's update check for it goes to the real network (`tauri.localhost`
+does not exist there) instead of through the app. So the web app no longer creates one here (`src/lib/nativeApp.ts` in the
+web repo) and these two files remove one left by an older build, before the web view starts. Only that folder: the
+journal's database stays.
