@@ -26,7 +26,9 @@ fn open_portable_window(app: &tauri::AppHandle) -> tauri::Result<()> {
         .first()
         .expect("tauri.windows.conf.json defines the main window")
         .clone();
-    let mut window = tauri::WebviewWindowBuilder::from_config(app, &config)?;
+    // No browser-style autofill pop-ups (saved names, addresses, contact details) on the entry and search boxes: this is an
+    // app, not a web page. It does not touch password or card autofill, which the app has no fields for.
+    let mut window = tauri::WebviewWindowBuilder::from_config(app, &config)?.general_autofill_enabled(false);
     if let Some(dir) = portable_data_dir() {
         remove_saved_site(&dir);
         window = window.data_directory(dir);
