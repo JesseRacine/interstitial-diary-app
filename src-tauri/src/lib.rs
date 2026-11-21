@@ -32,7 +32,11 @@ fn open_portable_window(app: &tauri::AppHandle) -> tauri::Result<()> {
     // sticks until undone. Settings > Appearance > Text size in the web app replaces it.
     let mut window = tauri::WebviewWindowBuilder::from_config(app, &config)?
         .general_autofill_enabled(false)
-        .zoom_hotkeys_enabled(false);
+        .zoom_hotkeys_enabled(false)
+        // Tauri's own file-drop handler takes dropped files before the page sees them, so dropping photos on the entry box did
+        // nothing (the web app reads them from the page's drag-and-drop). With it off, the page gets the drop. A file dropped
+        // anywhere else would then be opened in place of the app, which the web app prevents (src/lib/nativeShell.ts).
+        .disable_drag_drop_handler();
     if let Some(dir) = portable_data_dir() {
         remove_saved_site(&dir);
         window = window.data_directory(dir);
